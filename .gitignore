@@ -1,1 +1,7 @@
 */venv/
+**.pyc
+__pycache__/
+*.pyo
+*.pyd
+back
+/backend/.env
