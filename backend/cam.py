@@ -1,5 +1,18 @@
 import cv2
 import sys
+import requests
+
+def send_to_server(face_count, eye_count):
+    try:
+        url = "http://localhost:5000/vision" # Replace with your server URL or online server
+        payload = {
+            "face_count": face_count,
+            "eye_count": eye_count
+        }
+        response = requests.post(url, json=payload)
+        print(f"Sent to server: {payload}, Status: {response.status_code}")
+    except Exception as e:
+        print(f"Failed to send data: {e}")
 
 def eye_detection():
     # Load the pre-trained eye detector (Haar cascade classifier)
@@ -17,7 +30,7 @@ def eye_detection():
         return
     
     # Initialize webcam (0 is usually the default camera)
-    cap = cv2.VideoCapture("http://192.168.18.216:81/stream")
+    cap = cv2.VideoCapture("http://192.168.18.215:81/stream") # Replace with your camera URL
     # cap = cv2.VideoCapture(0)  # Uncomment this line to use the default webcam
     
     # Try to set higher resolution for better detection
@@ -127,7 +140,9 @@ def eye_detection():
             total_eyes += len(eyes_in_face)
         cv2.putText(frame, f'Eyes detected: {total_eyes}', (10, 60), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        
+
+        send_to_server(len(faces), total_eyes)
+
         # Display the resulting frame
         cv2.imshow('Eye Detection', frame)
         
