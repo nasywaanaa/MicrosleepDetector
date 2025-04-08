@@ -30,7 +30,7 @@ def eye_detection():
         return
     
     # Initialize webcam (0 is usually the default camera)
-    cap = cv2.VideoCapture("http://192.168.18.215:81/stream") # Replace with your camera URL
+    cap = cv2.VideoCapture("http://192.168.18.216:81/stream") # Replace with your camera URL
     # cap = cv2.VideoCapture(0)  # Uncomment this line to use the default webcam
     
     # Try to set higher resolution for better detection
