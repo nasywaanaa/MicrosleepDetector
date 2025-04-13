@@ -1,3 +1,4 @@
+import winsound
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,6 +9,8 @@ from datetime import datetime
 from collections import deque
 import threading
 import os
+
+import requests
 os.system("say 'Blink detected'")
 
 from facemesh_module import FaceMeshGenerator
@@ -38,29 +41,18 @@ class MicrosleepDetector:
         'MICROSLEEP': 3
     }
 
+    # Tambahkan parameter baru di __init__ MicrosleepDetector
     def __init__(self, camera_id=0, ear_threshold=0.24, consec_frames=3, 
-                 microsleep_frames=15, save_video=False, display_plot=True,
-                 enable_audio=True, sensitivity=0.7):
-        """
-        Initialize the MicrosleepDetector with camera and detection parameters.
-        
-        Args:
-            camera_id (int): Camera device ID
-            ear_threshold (float): Threshold for eye aspect ratio to detect closed eyes
-            consec_frames (int): Number of consecutive frames below threshold for blink
-            microsleep_frames (int): Number of consecutive frames to classify as microsleep
-            save_video (bool): Whether to save the processed video
-            display_plot (bool): Whether to display the EAR plot
-            enable_audio (bool): Whether to enable audio alerts
-            sensitivity (float): Detection sensitivity (0.0-1.0)
-        """
-        # Initialize components
+                microsleep_frames=15, save_video=False, display_plot=True,
+                enable_audio=True, sensitivity=0.7, driver_name="Default Driver", 
+                armada="Default Armada", rute="Default Rute", server_url="http://127.0.0.1:5000/vision"):
+        # Parameter lama
         self.generator = FaceMeshGenerator()
         self.eye_analyzer = EyeAspectRatioAnalyzer()
         self.microsleep_classifier = MicrosleepClassifier()
         self.microsleep_classifier.set_sensitivity(sensitivity)
         
-        # Detection parameters
+        # Parameter lama
         self.camera_id = camera_id
         self.EAR_THRESHOLD = ear_threshold
         self.CONSEC_FRAMES = consec_frames
@@ -69,6 +61,12 @@ class MicrosleepDetector:
         self.display_plot = display_plot
         self.enable_audio = enable_audio
         self.sensitivity = sensitivity
+        
+        # Parameter baru
+        self.driver_name = driver_name
+        self.armada = armada
+        self.rute = rute
+        self.server_url = server_url
         
         # Initialize capture and output
         self.cap = None
@@ -86,6 +84,10 @@ class MicrosleepDetector:
         self.audio_thread = None
         self.last_alert_time = 0
         self.alert_cooldown = 3.0  # seconds between alerts
+        
+        # Initialize last sent data time
+        self.last_data_sent_time = 0
+        self.data_send_interval = 1.0  # seconds between data sends
 
     def _init_video_capture(self):
         """Initialize video capture from camera"""
@@ -604,6 +606,63 @@ class MicrosleepDetector:
             cv.putText(frame, f"Calibrating: {progress:.1f}%", (10, frame.shape[0] - 60),
                       cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
+    def _send_data_to_server(self, status_alert):
+        """
+        Send detection data to server
+        
+        Args:
+            status_alert (str): Current alert status (Normal, Blink, Drowsy, Microsleep)
+        """
+        current_time = time.time()
+        # Only send data if sufficient time has passed since the last send
+        if current_time - self.last_data_sent_time >= self.data_send_interval:
+            self.last_data_sent_time = current_time
+            
+            binary_status = "ON" if status_alert in ["BLINK", "DROWSY", "MICROSLEEP"] else "OFF"
+            
+            # Prepare payload
+            payload = {
+                "nama_sopir": self.driver_name,
+                "timestamp": datetime.now().isoformat(),
+                "armada": self.armada,
+                "rute": self.rute,
+                "status_alert": binary_status,
+            }
+            
+            # Print log to terminal
+            print(f"[{payload['timestamp']}] Sopir: {payload['nama_sopir']} | "
+                f"Armada: {payload['armada']} | Rute: {payload['rute']} | "
+                f"Status: {payload['status_alert']}")
+            
+            # Verifikasi server URL
+            if not self.server_url or self.server_url == "dummy_url":
+                print("Server URL not configured or set to dummy. Skipping data upload.")
+                return
+                
+            # Send data to server
+            try:
+                response = requests.post(self.server_url, json=payload, timeout=3)
+                if response.status_code == 200:
+                    print(f"Data successfully sent to server. Response: {response.text[:100]}...")
+                else:
+                    print(f"Warning: Failed to send data to server. Status code: {response.status_code}")
+                    print(f"Response: {response.text[:100]}...")
+                    
+                    # Try accessing the root endpoint to check server status
+                    try:
+                        server_base = self.server_url.split('/vision')[0]
+                        status_response = requests.get(f"{server_base}/status", timeout=2)
+                        print(f"Server status endpoint: {status_response.status_code}")
+                    except Exception as status_error:
+                        print(f"Could not check server status: {status_error}")
+                    
+            except requests.exceptions.ConnectionError:
+                print(f"Error: Cannot connect to server at {self.server_url}. Is the server running?")
+            except requests.exceptions.Timeout:
+                print(f"Error: Request timed out connecting to {self.server_url}")
+            except Exception as e:
+                print(f"Error sending data to server: {e}")
+
     def _update_blink_detection(self, ear, smoothed_ear):
         """
         Update blink detection based on EAR value
@@ -619,6 +678,9 @@ class MicrosleepDetector:
         
         # Use the adaptive threshold if calibration is complete
         threshold = self.adaptive_threshold if self.calibration_complete else self.EAR_THRESHOLD
+        
+        # Previous status for checking changes
+        previous_state = self.alert_state
         
         # Microsleep detection logic
         if smoothed_ear < threshold:
@@ -713,6 +775,15 @@ class MicrosleepDetector:
                 self.frame_counter = 0
                 self.microsleep_frame_counter = 0
                 self.alert_state = self.ALERT_STATES['NORMAL']
+        
+        # Send data to server if state changed or periodically
+        if self.alert_state != previous_state or time.time() - self.last_data_sent_time >= self.data_send_interval:
+            # Convert alert state enum to string
+            state_names = {v: k for k, v in self.ALERT_STATES.items()}
+            status_alert = state_names[self.alert_state]
+            
+            # Send data to server
+            self._send_data_to_server(status_alert)
         
         # Store last state for state transition detection
         self.last_state = self.alert_state

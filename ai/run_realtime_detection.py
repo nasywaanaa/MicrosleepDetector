@@ -21,6 +21,14 @@ def parse_arguments():
                         help="Detection sensitivity (0.0-1.0, default: 0.8)")
     parser.add_argument("--audio", action="store_true", default=True,
                         help="Enable audio alerts")
+    parser.add_argument("--driver_name", type=str, default="Ahmad Sopir",
+                        help="Driver name (default: Ahmad Sopir)")
+    parser.add_argument("--armada", type=str, default="BUS-001",
+                        help="Armada ID (default: BUS-001)")
+    parser.add_argument("--rute", type=str, default="Jakarta-Bandung",
+                        help="Route information (default: Jakarta-Bandung)")
+    parser.add_argument("--server_url", type=str, default="http://127.0.0.1:5000/vision",
+                        help="Server URL (default: http://127.0.0.1:5000/vision)")
     
     return parser.parse_args()
 
@@ -38,6 +46,10 @@ def main():
     print(f"Display Plot: {'Enabled' if args.display_plot else 'Disabled'}")
     print(f"Audio Alerts: {'Enabled' if args.audio else 'Disabled'}")
     print(f"Sensitivity: {args.sensitivity}")
+    print(f"Driver Name: {args.driver_name}")
+    print(f"Armada: {args.armada}")
+    print(f"Route: {args.rute}")
+    print(f"Server URL: {args.server_url}")
     print("================================================\n")
     
     print("Starting detection system...")
@@ -53,7 +65,11 @@ def main():
         save_video=args.record,
         display_plot=args.display_plot,
         enable_audio=args.audio,
-        sensitivity=args.sensitivity
+        sensitivity=args.sensitivity,
+        driver_name=args.driver_name,
+        armada=args.armada,
+        rute=args.rute,
+        server_url=args.server_url
     )
     
     # Run the detector

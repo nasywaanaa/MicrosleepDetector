@@ -18,9 +18,13 @@ DEVICE_LABEL = "esp32-cam"
 
 # MongoDB setup
 MONGO_URI = os.getenv("MONGO_URI")
-client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
-db = client["microsleep_db"]  # Nama database
-collection = db["vision_logs"]  # Nama koleksi/tabel
+client = MongoClient(
+    mongo_uri,
+    tls=True,
+    tlsAllowInvalidCertificates=True  # ← aktifkan untuk development
+)
+db = client["MicrosleepDetector"]
+collection = db["information"]
 
 @app.route("/vision", methods=["POST"])
 def receive_vision_data():
@@ -29,17 +33,22 @@ def receive_vision_data():
         print("Received data:", data)
 
         document = {
-            "face_count": data.get("face_count", 0),
-            "eye_count": data.get("eye_count", 0),
-            "timestamp": datetime.now(timezone.utc)
+            "nama_sopir": data.get("nama_sopir", "Unknown"),
+            "timestamp": datetime.fromisoformat(data.get("timestamp", datetime.now(timezone.utc).isoformat())),
+            "armada": data.get("armada", "Unknown"),
+            "rute": data.get("rute", "Unknown"),
+            "status_alert": data.get("status_alert", "NORMAL"),
         }
 
         result = collection.insert_one(document)
         print("Inserted to MongoDB with ID:", result.inserted_id)
 
         ubidots_payload = {
-            "face_count": data.get("face_count", 0),
-            "eye_count": data.get("eye_count", 0)
+            "driver_name": data.get("nama_sopir", "Unknown"),
+            "armada": data.get("armada", "Unknown"),
+            "rute": data.get("rute", "Unknown"),
+            "timestamp": data.get("timestamp", datetime.now(timezone.utc).isoformat()),
+            "status_alert": 1 if data.get("status_alert") == "MICROSLEEP" else 0
         }
 
         headers = {
@@ -53,7 +62,7 @@ def receive_vision_data():
 
         return jsonify({
             "status": "success",
-            "ubidots_response": response.json()
+            "ubidots_response": response.json() if response.status_code == 200 else {"error": response.status_code}
         })
     except Exception as e:
         print("ERROR:", e)
