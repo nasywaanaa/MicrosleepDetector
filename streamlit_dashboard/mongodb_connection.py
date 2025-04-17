@@ -1,20 +1,13 @@
-# mongodb_connection.py
-
 import pymongo
-from dotenv import load_dotenv
+import streamlit as st
 import os
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Retrieve the MongoDB URI from the environment
-MONGO_URI = os.getenv("MONGO_URI")
-
 def get_mongo_client():
-    if MONGO_URI is None:
-        raise ValueError("MONGO_URI is not set in the environment variables")
+    MONGO_URI = st.secrets.get("MONGO_URI") or os.getenv("MONGO_URI")
     
-    # Set up the MongoDB connection
+    if not MONGO_URI:
+        raise ValueError("MONGO_URI is not set in environment variables or Streamlit secrets")
+
     client = pymongo.MongoClient(MONGO_URI)
     db = client["MicrosleepDetector"]
     collection = db["information"]
