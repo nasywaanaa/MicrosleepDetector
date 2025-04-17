@@ -2,3 +2,4 @@ pandas==2.2.3
 plotly==5.18.0
 pymongo==3.12.3
 streamlit==1.43.0
+pymongo[srv]
