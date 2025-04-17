@@ -123,3 +123,10 @@ with col5:
     render_card("Shift Malam", "🌙", sopir_shift.get('Shift Malam', 0), "#b3127aff")
 
 st.markdown("---")
+
+# Tombol Logout (di sidebar)
+with st.sidebar:
+    if st.button("Logout"):
+        st.session_state["logged_in"] = False
+        st.success("Berhasil logout.")
+        st.experimental_rerun()
