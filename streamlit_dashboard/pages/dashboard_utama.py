@@ -1,20 +1,46 @@
+# dashboard_utama.py
+
 import streamlit as st
 import pandas as pd
+from mongodb_connection import get_mongo_client
 
-if not st.session_state.get("logged_in"):
-    st.warning("Anda harus login untuk mengakses halaman ini.")
-    st.stop()
+# Fetch the MongoDB collection
+collection = get_mongo_client()
 
-st.set_page_config(page_title="Dashboard Utama", layout="wide")
-st.title("Dashboard Utama")
+# Function to fetch data from MongoDB
+def fetch_data_from_mongo():
+    # Query all documents from the collection
+    query = {}
+    projection = {"_id": 0}  # Exclude _id field
+    cursor = collection.find(query, projection)
+    
+    # Convert to DataFrame
+    data = pd.DataFrame(list(cursor))
+    
+    # Check if 'timestamp' column exists
+    if 'timestamp' not in data.columns:
+        st.error("Error: 'timestamp' column not found in the MongoDB collection!")
+        return pd.DataFrame()  # Return empty DataFrame if the column is not found
+    
+    # Convert 'timestamp' to datetime if it exists (handle ISODate format properly)
+    try:
+        data['timestamp'] = pd.to_datetime(data['timestamp'], errors='coerce')
+    except Exception as e:
+        st.error(f"Error converting 'timestamp' to datetime: {e}")
+        return pd.DataFrame()  # Return empty DataFrame if conversion fails
+    
+    # Check if conversion worked
+    if data['timestamp'].isnull().any():
+        st.warning("Some 'timestamp' values could not be converted properly.")
+    
+    return data
 
-# Load data
-data = pd.read_csv("assets/microsleep_log.csv")
-data['timestamp'] = pd.to_datetime(data['timestamp'])
+# Load data from MongoDB
+data = fetch_data_from_mongo()
+
+# Process and display the data
 data['date'] = data['timestamp'].dt.date
 data['hour'] = data['timestamp'].dt.hour
-
-# Tambahkan kolom shift
 def tentukan_shift(jam):
     if 6 <= jam < 14:
         return "Shift Pagi"
@@ -22,7 +48,6 @@ def tentukan_shift(jam):
         return "Shift Siang"
     else:
         return "Shift Malam"
-
 data['shift'] = data['hour'].apply(tentukan_shift)
 
 # --- Filter Tanggal ---
@@ -30,7 +55,7 @@ st.subheader("🗓️ Filter Tanggal")
 # all_dates = sorted(data['date'].unique())
 # selected_date = st.selectbox("Pilih Tanggal", options=["Semua Tanggal"] + [str(d) for d in all_dates])
 
-# Pastikan kolom 'date' bertipe datetime
+# Pastikan kolom 'date' bertipe datetcime
 data['date'] = pd.to_datetime(data['date'])
 
 # Ambil batas tanggal dari data

@@ -1,24 +1,64 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from mongodb_connection import get_mongo_client
+import datetime
 
+# Check if the user is logged in
 if not st.session_state.get("logged_in"):
     st.warning("Anda harus login untuk mengakses halaman ini.")
     st.stop()
 
 st.title("Klasifikasi dan Evaluasi Sopir")
 
-# Load data
-df = pd.read_csv("assets/microsleep_log.csv")
-df['timestamp'] = pd.to_datetime(df['timestamp'])
-df['date'] = df['timestamp'].dt.date
+# Fetch data from MongoDB
+collection = get_mongo_client()
+
+# Function to fetch data from MongoDB
+# Function to fetch data from MongoDB
+def fetch_data_from_mongo():
+    # Query all documents from the collection
+    query = {}
+    projection = {"_id": 0}  # Exclude _id field
+    cursor = collection.find(query, projection)
+    
+    # Convert to DataFrame
+    data = pd.DataFrame(list(cursor))
+    
+    # Check if 'timestamp' column exists
+    if 'timestamp' not in data.columns:
+        st.error("Error: 'timestamp' column not found in the MongoDB collection!")
+        return pd.DataFrame()  # Return empty DataFrame if the column is not found
+    
+    # Convert 'timestamp' to datetime if it exists (handle ISODate format properly)
+    try:
+        data['timestamp'] = pd.to_datetime(data['timestamp'], errors='coerce')
+    except Exception as e:
+        st.error(f"Error converting 'timestamp' to datetime: {e}")
+        return pd.DataFrame()  # Return empty DataFrame if conversion fails
+    
+    # Check if conversion worked
+    if data['timestamp'].isnull().any():
+        st.warning("Some 'timestamp' values could not be converted properly.")
+    
+    return data
+
+# Load data from MongoDB
+df = fetch_data_from_mongo()
 
 # ===== FILTER TANGGAL =====
 st.subheader("Filter Tanggal")
-df['date'] = pd.to_datetime(df['date'])  # pastikan format datetime
-min_date = df['date'].min().date()
-max_date = df['date'].max().date()
+# Ensure 'date' column is in correct format
+df['date'] = pd.to_datetime(df['timestamp']).dt.date
+
+# Get the minimum and maximum dates
+min_date = df['date'].min()  # Already a datetime.date object
+max_date = df['date'].max()  # Already a datetime.date object
+
+# Get today's date
 today = pd.to_datetime("today").date()
+
+# Set the default date
 default_date = today if min_date <= today <= max_date else max_date
 
 lihat_semua = st.checkbox("Lihat Semua Tanggal", value=True)
@@ -31,17 +71,22 @@ if not lihat_semua:
         max_value=max_date
     )
 
-    # Tampilkan warning friendly jika user belum pilih rentang
+    # Display warning if the user hasn't selected a range
     if not isinstance(date_input, tuple):
         st.info("Klik dua kali tanggal jika hanya ingin memilih satu hari, atau pilih dua tanggal untuk rentang waktu.")
 
-    # Tangani satu atau dua tanggal
+    # Handle one or two selected dates
     if isinstance(date_input, tuple):
         start_date, end_date = date_input
     else:
         start_date = end_date = date_input
 
-    filtered_df = df[(df['date'] >= pd.to_datetime(start_date)) & (df['date'] <= pd.to_datetime(end_date))]
+    # Convert start_date and end_date to datetime.date for comparison
+    start_date = start_date if isinstance(start_date, datetime.date) else start_date.date()
+    end_date = end_date if isinstance(end_date, datetime.date) else end_date.date()
+
+    # Filter the DataFrame
+    filtered_df = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
 
     st.caption(f"Menampilkan data dari {start_date.strftime('%d %b %Y')} hingga {end_date.strftime('%d %b %Y')}")
 else:
@@ -50,7 +95,7 @@ else:
 
 # ===== PROSES LANJUT DENGAN DATA YANG SUDAH DIFILTER =====
 
-# Tambahkan kolom shift
+# Add shift column
 def tentukan_shift(jam):
     if 6 <= jam < 14:
         return "Shift Pagi"
@@ -61,7 +106,7 @@ def tentukan_shift(jam):
 
 filtered_df['shift'] = filtered_df['timestamp'].dt.hour.apply(tentukan_shift)
 
-# Hitung shift terbanyak per sopir
+# Count the most frequent shift per driver
 shift_terbanyak = (
     filtered_df.groupby(['nama_sopir', 'shift'])
     .size()
@@ -71,10 +116,10 @@ shift_terbanyak = (
     .rename(columns={'shift': 'shift_terbanyak'})
 )[['nama_sopir', 'shift_terbanyak']]
 
-# Hitung jumlah microsleep per sopir
+# Count microsleep occurrences per driver
 classification = filtered_df.groupby('nama_sopir').size().reset_index(name='jumlah')
 
-# Hitung rata-rata & klasifikasikan berdasarkan aturan
+# Calculate average and classify based on rules
 rata2 = classification['jumlah'].mean()
 
 def klasifikasi(x):
@@ -87,14 +132,14 @@ def klasifikasi(x):
 
 classification['kategori'] = classification['jumlah'].apply(klasifikasi)
 
-# Gabungkan shift dominan
+# Merge dominant shift data
 classification = classification.merge(shift_terbanyak, on='nama_sopir', how='left')
 
-# Siapkan data untuk bar chart (pastikan semua kategori tampil)
+# Prepare data for bar chart (ensure all categories are displayed)
 kategori_order = ['Aman', 'Waspada', 'Bahaya!']
 kategori_summary = classification.groupby('kategori').size().reindex(kategori_order, fill_value=0).reset_index(name='jumlah')
 
-# Tampilkan histogram
+# Display histogram
 st.subheader("Distribusi Sopir Berdasarkan Kategori")
 fig = px.bar(
     kategori_summary,
@@ -104,6 +149,6 @@ fig = px.bar(
 )
 st.plotly_chart(fig)
 
-# Tampilkan tabel detail berdasarkan kategori
+# Display detailed table based on category selection
 selected = st.selectbox("Lihat Detail Kategori", kategori_order)
 st.dataframe(classification[classification['kategori'] == selected])
