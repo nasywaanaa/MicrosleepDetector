@@ -21,3 +21,9 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
+# Tombol Logout (di sidebar)
+with st.sidebar:
+    if st.button("Logout"):
+        st.session_state["logged_in"] = False
+        st.success("Berhasil logout.")
+        st.experimental_rerun()
