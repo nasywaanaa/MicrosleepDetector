@@ -4,6 +4,11 @@ import streamlit as st
 import pandas as pd
 from mongodb_connection import get_mongo_client
 
+# Check if the user is logged in
+if not st.session_state.get("logged_in"):
+    st.warning("Anda harus login untuk mengakses halaman ini.")
+    st.stop()
+
 # Fetch the MongoDB collection
 collection = get_mongo_client()
 
