@@ -1,13 +1,12 @@
-# mongodb_connection.py
 import pymongo
 import streamlit as st
+import os
 
-# Retrieve the MongoDB URI from Streamlit secrets
-MONGO_URI = st.secrets["MONGO_URI"]
+MONGO_URI = st.secrets.get("MONGO_URI", os.getenv("MONGO_URI", None))
 
 def get_mongo_client():
-    if MONGO_URI is None:
-        raise ValueError("MONGO_URI is not set in Streamlit secrets")
+    if not MONGO_URI:
+        raise ValueError("MONGO_URI is not set in secrets or environment variables.")
     
     client = pymongo.MongoClient(MONGO_URI)
     db = client["MicrosleepDetector"]
