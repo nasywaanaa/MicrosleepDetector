@@ -14,11 +14,5 @@ if st.button("Login"):
         st.session_state["logged_in"] = True
         st.success("Login berhasil!")
         st.switch_page("pages/dashboard_utama.py")
-        # Tombol Logout (di sidebar)
-        with st.sidebar:
-            if st.button("Logout"):
-                st.session_state["logged_in"] = False
-                st.success("Berhasil logout.")
-                st.experimental_rerun()
     else:
         st.error("Username atau password salah.")
