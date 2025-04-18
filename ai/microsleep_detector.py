@@ -1,4 +1,4 @@
-import winsound
+import platform
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,6 +9,7 @@ from datetime import datetime
 from collections import deque
 import threading
 import os
+import serial
 
 import requests
 os.system("say 'Blink detected'")
@@ -40,6 +41,14 @@ class MicrosleepDetector:
         'DROWSY': 2,
         'MICROSLEEP': 3
     }
+
+    def send_serial_signal(self, char='B'):
+        if self.serial_port and self.serial_port.is_open:
+            try:
+                self.serial_port.write(char.encode())
+                print(f"Sent '{char}' to Arduino.")
+            except Exception as e:
+                print(f"Failed to write to serial: {e}")
 
     # Tambahkan parameter baru di __init__ MicrosleepDetector
     def __init__(self, camera_id=0, ear_threshold=0.24, consec_frames=3, 
@@ -88,6 +97,13 @@ class MicrosleepDetector:
         # Initialize last sent data time
         self.last_data_sent_time = 0
         self.data_send_interval = 1.0  # seconds between data sends
+
+        try:
+            self.serial_port = serial.Serial('/dev/tty.SLAB_USBtoUART', 9600, timeout=1)  # Ganti port sesuai sistem kamu
+            print("🔌 Serial connection established with ESP32.")
+        except Exception as e:
+            self.serial_port = None
+            print(f"❌ Failed to connect to serial port: {e}")
 
     def _init_video_capture(self):
         """Initialize video capture from camera"""
@@ -608,7 +624,7 @@ class MicrosleepDetector:
 
     def _send_data_to_server(self, status_alert):
         """
-        Send detection data to server
+        Send detection data to server and Ubidots
         
         Args:
             status_alert (str): Current alert status (Normal, Blink, Drowsy, Microsleep)
@@ -619,6 +635,10 @@ class MicrosleepDetector:
             self.last_data_sent_time = current_time
             
             binary_status = "ON" if status_alert in ["BLINK", "DROWSY", "MICROSLEEP"] else "OFF"
+
+            if binary_status == "ON":
+                self.send_serial_signal('B')
+
             
             # Prepare payload
             payload = {
@@ -656,12 +676,77 @@ class MicrosleepDetector:
                     except Exception as status_error:
                         print(f"Could not check server status: {status_error}")
                     
-            except requests.exceptions.ConnectionError:
+                    # Since server is unreachable, try sending directly to Ubidots
+                    self._send_to_ubidots(status_alert, payload)
+
+            # except requests.exceptions.ConnectionError:
+            #     print(f"Error: Cannot connect to server at {self.server_url}. Is the server running?")
+            # except requests.exceptions.Timeout:
+            #     print(f"Error: Request timed out connecting to {self.server_url}")
+            # except Exception as e:
+            #     print(f"Error sending data to server: {e}")
+
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
                 print(f"Error: Cannot connect to server at {self.server_url}. Is the server running?")
-            except requests.exceptions.Timeout:
-                print(f"Error: Request timed out connecting to {self.server_url}")
+                # Since server is unreachable, try sending directly to Ubidots
+                self._send_to_ubidots(status_alert, payload)
             except Exception as e:
                 print(f"Error sending data to server: {e}")
+                # Attempt Ubidots backup on any server error
+                self._send_to_ubidots(status_alert, payload)
+
+    def _send_to_ubidots(self, status_alert, payload):
+        """
+        Send data directly to Ubidots as a backup mechanism
+        
+        Args:
+            status_alert (str): Current alert status (Normal, Blink, Drowsy, Microsleep)
+            payload (dict): Original payload prepared for the server
+        """
+        try:
+            # Try to get token from environment
+            import os
+            from dotenv import load_dotenv
+            
+            # Load .env file if available
+            try:
+                load_dotenv()
+            except Exception:
+                pass  # Continue even if dotenv fails
+                
+            ubidots_token = os.getenv("UBIDOTS_TOKEN")
+            device_label = os.getenv("DEVICE_LABEL", "esp32-cam")
+            
+            # If no token available, can't proceed
+            if not ubidots_token:
+                print("Warning: UBIDOTS_TOKEN not found in environment. Skipping direct Ubidots upload.")
+                return
+                
+            # Prepare Ubidots payload (following the same format as in the server code)
+            ubidots_payload = {
+                "driver_name": payload.get("nama_sopir", "Unknown"),
+                "armada": payload.get("armada", "Unknown"),
+                "rute": payload.get("rute", "Unknown"),
+                "timestamp": payload.get("timestamp", datetime.now().isoformat()),
+                "status_alert": 1 if status_alert == "MICROSLEEP" else 0
+            }
+            
+            headers = {
+                "X-Auth-Token": ubidots_token,
+                "Content-Type": "application/json"
+            }
+            
+            url = f"https://industrial.api.ubidots.com/api/v1.6/devices/{device_label}"
+            
+            response = requests.post(url, headers=headers, json=ubidots_payload, timeout=5)
+            
+            if response.status_code == 200:
+                print(f"Data successfully sent directly to Ubidots. Status: {response.status_code}")
+            else:
+                print(f"Warning: Failed to send data directly to Ubidots. Status: {response.status_code}")
+                print(f"Response: {response.text[:100] if response.text else 'No response text'}")
+        except Exception as e:
+            print(f"Error sending data directly to Ubidots: {e}")
 
     def _update_blink_detection(self, ear, smoothed_ear):
         """
@@ -732,6 +817,7 @@ class MicrosleepDetector:
                                 self.microsleep_frames.append(self.frame_number)
                                 
                                 # Play alert sound if enabled
+                                print("⚠️ MICROSLEEP detected!")
                                 if self.enable_audio:
                                     self._play_alert()
                             
@@ -794,38 +880,44 @@ class MicrosleepDetector:
     def _play_alert(self):
         """Play an alert sound when microsleep is detected"""
         current_time = time.time()
-        # Only play alert if sufficient time has passed since the last one
         if current_time - self.last_alert_time >= self.alert_cooldown:
             self.last_alert_time = current_time
-            
-            # Use a separate thread to avoid blocking the main processing
+
             if self.audio_thread is None or not self.audio_thread.is_alive():
                 try:
-                    # Different alert methods depending on platform
                     import platform
                     system = platform.system()
-                    
+
                     if system == 'Windows':
                         # Windows - use winsound
                         self.audio_thread = threading.Thread(
                             target=lambda: winsound.Beep(1000, 1000)
                         )
+                    if system == 'Windows':
+                        import winsound
+                        self.audio_thread = threading.Thread(
+                            target=lambda: winsound.Beep(1000, 1000)
+                        )
                     elif system == 'Darwin':  # macOS
-                        # macOS - use system alert sound
                         self.audio_thread = threading.Thread(
                             target=lambda: os.system('afplay /System/Library/Sounds/Sosumi.aiff')
                         )
                     else:
-                        # Linux/others - print to console
-                        print('\a')  # Console bell
+                        print('\a')  # Console bell (Linux)
                         self.audio_thread = None
-                    
-                    # Start the thread if it was created
+
                     if self.audio_thread:
                         self.audio_thread.daemon = True
                         self.audio_thread.start()
                 except Exception as e:
                     print(f"Error playing alert sound: {e}")
+        if self.serial_port and self.serial_port.is_open:
+            try:
+                self.serial_port.write(b'B')  # Kirim karakter 'B' ke ESP32
+                print("📢 Sent 'B' to ESP32 for buzzer alert.")
+            except Exception as e:
+                print(f"❌ Failed to write to serial port: {e}")
+
 
     def run(self):
         """Main loop to continuously process video frames"""
@@ -916,6 +1008,10 @@ class MicrosleepDetector:
         # Close plot
         if self.display_plot and plt.fignum_exists(self.fig.number):
             plt.close(self.fig)
+        if self.serial_port and self.serial_port.is_open:
+            self.serial_port.close()
+            print("🔌 Serial port closed.")
+
             
     def adjust_sensitivity(self, sensitivity):
         """
