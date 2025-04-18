@@ -608,7 +608,7 @@ class MicrosleepDetector:
 
     def _send_data_to_server(self, status_alert):
         """
-        Send detection data to server
+        Send detection data to server and Ubidots
         
         Args:
             status_alert (str): Current alert status (Normal, Blink, Drowsy, Microsleep)
@@ -656,12 +656,77 @@ class MicrosleepDetector:
                     except Exception as status_error:
                         print(f"Could not check server status: {status_error}")
                     
-            except requests.exceptions.ConnectionError:
+                    # Since server is unreachable, try sending directly to Ubidots
+                    self._send_to_ubidots(status_alert, payload)
+
+            # except requests.exceptions.ConnectionError:
+            #     print(f"Error: Cannot connect to server at {self.server_url}. Is the server running?")
+            # except requests.exceptions.Timeout:
+            #     print(f"Error: Request timed out connecting to {self.server_url}")
+            # except Exception as e:
+            #     print(f"Error sending data to server: {e}")
+
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
                 print(f"Error: Cannot connect to server at {self.server_url}. Is the server running?")
-            except requests.exceptions.Timeout:
-                print(f"Error: Request timed out connecting to {self.server_url}")
+                # Since server is unreachable, try sending directly to Ubidots
+                self._send_to_ubidots(status_alert, payload)
             except Exception as e:
                 print(f"Error sending data to server: {e}")
+                # Attempt Ubidots backup on any server error
+                self._send_to_ubidots(status_alert, payload)
+
+    def _send_to_ubidots(self, status_alert, payload):
+        """
+        Send data directly to Ubidots as a backup mechanism
+        
+        Args:
+            status_alert (str): Current alert status (Normal, Blink, Drowsy, Microsleep)
+            payload (dict): Original payload prepared for the server
+        """
+        try:
+            # Try to get token from environment
+            import os
+            from dotenv import load_dotenv
+            
+            # Load .env file if available
+            try:
+                load_dotenv()
+            except Exception:
+                pass  # Continue even if dotenv fails
+                
+            ubidots_token = os.getenv("UBIDOTS_TOKEN")
+            device_label = os.getenv("DEVICE_LABEL", "esp32-cam")
+            
+            # If no token available, can't proceed
+            if not ubidots_token:
+                print("Warning: UBIDOTS_TOKEN not found in environment. Skipping direct Ubidots upload.")
+                return
+                
+            # Prepare Ubidots payload (following the same format as in the server code)
+            ubidots_payload = {
+                "driver_name": payload.get("nama_sopir", "Unknown"),
+                "armada": payload.get("armada", "Unknown"),
+                "rute": payload.get("rute", "Unknown"),
+                "timestamp": payload.get("timestamp", datetime.now().isoformat()),
+                "status_alert": 1 if status_alert == "MICROSLEEP" else 0
+            }
+            
+            headers = {
+                "X-Auth-Token": ubidots_token,
+                "Content-Type": "application/json"
+            }
+            
+            url = f"https://industrial.api.ubidots.com/api/v1.6/devices/{device_label}"
+            
+            response = requests.post(url, headers=headers, json=ubidots_payload, timeout=5)
+            
+            if response.status_code == 200:
+                print(f"Data successfully sent directly to Ubidots. Status: {response.status_code}")
+            else:
+                print(f"Warning: Failed to send data directly to Ubidots. Status: {response.status_code}")
+                print(f"Response: {response.text[:100] if response.text else 'No response text'}")
+        except Exception as e:
+            print(f"Error sending data directly to Ubidots: {e}")
 
     def _update_blink_detection(self, ear, smoothed_ear):
         """
