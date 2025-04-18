@@ -1,4 +1,3 @@
-import winsound
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,6 +8,7 @@ from datetime import datetime
 from collections import deque
 import threading
 import os
+import serial
 
 import requests
 os.system("say 'Blink detected'")
@@ -40,6 +40,14 @@ class MicrosleepDetector:
         'DROWSY': 2,
         'MICROSLEEP': 3
     }
+
+    def send_serial_signal(self, char='B'):
+        if self.serial_port and self.serial_port.is_open:
+            try:
+                self.serial_port.write(char.encode())
+                print(f"Sent '{char}' to Arduino.")
+            except Exception as e:
+                print(f"Failed to write to serial: {e}")
 
     # Tambahkan parameter baru di __init__ MicrosleepDetector
     def __init__(self, camera_id=0, ear_threshold=0.24, consec_frames=3, 
@@ -88,6 +96,13 @@ class MicrosleepDetector:
         # Initialize last sent data time
         self.last_data_sent_time = 0
         self.data_send_interval = 1.0  # seconds between data sends
+
+        try:
+            self.serial_port = serial.Serial('/dev/tty.SLAB_USBtoUART', 9600)  # Ganti dengan port kamu
+            time.sleep(2)  # Waktu tunggu agar koneksi stabil
+        except Exception as e:
+            print(f"Serial init failed: {e}")
+            self.serial_port = None
 
     def _init_video_capture(self):
         """Initialize video capture from camera"""
@@ -619,6 +634,10 @@ class MicrosleepDetector:
             self.last_data_sent_time = current_time
             
             binary_status = "ON" if status_alert in ["BLINK", "DROWSY", "MICROSLEEP"] else "OFF"
+
+            if binary_status == "ON":
+                self.send_serial_signal('B')
+
             
             # Prepare payload
             payload = {
@@ -859,38 +878,33 @@ class MicrosleepDetector:
     def _play_alert(self):
         """Play an alert sound when microsleep is detected"""
         current_time = time.time()
-        # Only play alert if sufficient time has passed since the last one
         if current_time - self.last_alert_time >= self.alert_cooldown:
             self.last_alert_time = current_time
-            
-            # Use a separate thread to avoid blocking the main processing
+
             if self.audio_thread is None or not self.audio_thread.is_alive():
                 try:
-                    # Different alert methods depending on platform
                     import platform
                     system = platform.system()
-                    
+
                     if system == 'Windows':
-                        # Windows - use winsound
+                        import winsound  # ✅ Letakkan di dalam blok ini
                         self.audio_thread = threading.Thread(
                             target=lambda: winsound.Beep(1000, 1000)
                         )
                     elif system == 'Darwin':  # macOS
-                        # macOS - use system alert sound
                         self.audio_thread = threading.Thread(
                             target=lambda: os.system('afplay /System/Library/Sounds/Sosumi.aiff')
                         )
                     else:
-                        # Linux/others - print to console
-                        print('\a')  # Console bell
+                        print('\a')  # Console bell (Linux)
                         self.audio_thread = None
-                    
-                    # Start the thread if it was created
+
                     if self.audio_thread:
                         self.audio_thread.daemon = True
                         self.audio_thread.start()
                 except Exception as e:
                     print(f"Error playing alert sound: {e}")
+
 
     def run(self):
         """Main loop to continuously process video frames"""
