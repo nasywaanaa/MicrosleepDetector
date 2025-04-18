@@ -19,7 +19,7 @@ DEVICE_LABEL = "esp32-cam"
 # MongoDB setup
 MONGO_URI = os.getenv("MONGO_URI")
 client = MongoClient(
-    mongo_uri,
+    MONGO_URI,
     tls=True,
     tlsAllowInvalidCertificates=True  # ← aktifkan untuk development
 )
@@ -70,4 +70,4 @@ def receive_vision_data():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5001)
