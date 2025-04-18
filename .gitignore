@@ -5,3 +5,4 @@ __pycache__/
 *.pyd
 back
 /backend/.env
+/streamlit_dashboard/.env

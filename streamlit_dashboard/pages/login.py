@@ -1,9 +1,7 @@
 import streamlit as st
-import json
 
-# Load kredensial
-with open("admin_config.json") as f:
-    creds = json.load(f)
+# Load kredensial dari secrets
+creds = st.secrets["admin"]
 
 st.set_page_config(page_title="Login Admin", layout="centered")
 st.title("Login Admin")

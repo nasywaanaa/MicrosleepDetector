@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 
 st.set_page_config(page_title="Microsleep Dashboard", layout="wide")
 
@@ -8,8 +9,9 @@ st.markdown("""
 Dashboard ini membantu memantau dan menganalisis deteksi microsleep pada sopir.
 """)
 
-st.image("assets/anjay.jpg", use_container_width=True)  # bisa atur width sesuai kebutuhan
-# st.image("https://linkgambar.com/logo.png", width=200)
+image_path = os.path.join(os.path.dirname(__file__), 'assets', 'anjay.jpg')
+st.image(image_path, use_container_width=True)
+
 
 # Setelah semua visualisasi dan tabel...
 st.markdown("---")
@@ -19,3 +21,9 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
+# Tombol Logout (di sidebar)
+with st.sidebar:
+    if st.button("Logout"):
+        st.session_state["logged_in"] = False
+        st.success("Berhasil logout.")
+        st.experimental_rerun()
