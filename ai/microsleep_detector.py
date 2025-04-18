@@ -1,4 +1,4 @@
-import winsound
+import platform
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,6 +9,7 @@ from datetime import datetime
 from collections import deque
 import threading
 import os
+import serial
 
 import requests
 os.system("say 'Blink detected'")
@@ -88,6 +89,13 @@ class MicrosleepDetector:
         # Initialize last sent data time
         self.last_data_sent_time = 0
         self.data_send_interval = 1.0  # seconds between data sends
+
+        try:
+            self.serial_port = serial.Serial('/dev/tty.SLAB_USBtoUART', 9600, timeout=1)  # Ganti port sesuai sistem kamu
+            print("🔌 Serial connection established with ESP32.")
+        except Exception as e:
+            self.serial_port = None
+            print(f"❌ Failed to connect to serial port: {e}")
 
     def _init_video_capture(self):
         """Initialize video capture from camera"""
@@ -732,6 +740,7 @@ class MicrosleepDetector:
                                 self.microsleep_frames.append(self.frame_number)
                                 
                                 # Play alert sound if enabled
+                                print("⚠️ MICROSLEEP detected!")
                                 if self.enable_audio:
                                     self._play_alert()
                             
@@ -810,6 +819,11 @@ class MicrosleepDetector:
                         self.audio_thread = threading.Thread(
                             target=lambda: winsound.Beep(1000, 1000)
                         )
+                    if system == 'Windows':
+                        import winsound
+                        self.audio_thread = threading.Thread(
+                            target=lambda: winsound.Beep(1000, 1000)
+                        )
                     elif system == 'Darwin':  # macOS
                         # macOS - use system alert sound
                         self.audio_thread = threading.Thread(
@@ -826,6 +840,13 @@ class MicrosleepDetector:
                         self.audio_thread.start()
                 except Exception as e:
                     print(f"Error playing alert sound: {e}")
+        if self.serial_port and self.serial_port.is_open:
+            try:
+                self.serial_port.write(b'B')  # Kirim karakter 'B' ke ESP32
+                print("📢 Sent 'B' to ESP32 for buzzer alert.")
+            except Exception as e:
+                print(f"❌ Failed to write to serial port: {e}")
+
 
     def run(self):
         """Main loop to continuously process video frames"""
@@ -916,6 +937,10 @@ class MicrosleepDetector:
         # Close plot
         if self.display_plot and plt.fignum_exists(self.fig.number):
             plt.close(self.fig)
+        if self.serial_port and self.serial_port.is_open:
+            self.serial_port.close()
+            print("🔌 Serial port closed.")
+
             
     def adjust_sensitivity(self, sensitivity):
         """
