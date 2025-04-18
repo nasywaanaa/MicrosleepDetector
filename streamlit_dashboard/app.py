@@ -9,7 +9,7 @@ st.markdown("""
 Dashboard ini membantu memantau dan menganalisis deteksi microsleep pada sopir.
 """)
 
-image_path = os.path.join(os.path.dirname(__file__), 'assets', 'anjay.jpg')
+image_path = os.path.join(os.path.dirname(__file__), 'assets', 'foto.jpg')
 st.image(image_path, use_container_width=True)
 
 
