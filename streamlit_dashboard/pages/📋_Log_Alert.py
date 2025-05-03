@@ -99,6 +99,27 @@ with st.expander("Filter Data"):
         if not isinstance(date_input, tuple):
             st.info("Klik dua kali tanggal jika hanya ingin memilih satu hari, atau pilih dua tanggal untuk rentang waktu.")
 
+# ================================
+# Grouping by Nama Sopir dan Shift dengan Frekuensi Event
+# ================================
+def calculate_alert_frequency(group):
+    # Urutkan berdasarkan waktu
+    group = group.sort_values('timestamp')
+    # Hitung selisih waktu antar status_alert ON
+    group['time_diff'] = group['timestamp'].diff().fillna(pd.Timedelta(minutes=16))
+    # Tandai event baru jika jarak waktu lebih dari 15 menit
+    group['new_event'] = group['time_diff'] > pd.Timedelta(minutes=15)
+    # Gunakan cumsum untuk membuat kelompok event
+    group['event_group'] = group['new_event'].cumsum()
+    # Ambil hanya satu baris per event_group
+    return pd.DataFrame({
+        'nama_sopir': [group['nama_sopir'].iloc[0]],
+        'armada': [group['armada'].iloc[0]],
+        'rute': [group['rute'].iloc[0]],
+        'shift': [group['shift'].iloc[0]],
+        'frekuensi_microsleep': [group['event_group'].nunique()],
+        'jumlah_alert': [len(group)]
+    })
 
 # ================================
 # Apply Filters
@@ -127,8 +148,16 @@ df = df[
     (df['date'] <= end_date.date())  # Convert to date for comparison
 ]
 
-# ================================
-# Display Filtered Results
-# ================================
-st.subheader("Hasil Filter Riwayat Microsleep (Status ON)")
-st.dataframe(df[['nama_sopir', 'timestamp', 'armada', 'rute', 'shift', 'status_alert']])
+# Kelompokkan berdasarkan sopir dan shift
+result_df = df.groupby(['nama_sopir', 'shift']).apply(calculate_alert_frequency).reset_index(drop=True)
+
+# Tampilkan hasil akhir
+st.subheader("Frekuensi Microsleep per Sopir dan Shift")
+st.dataframe(result_df[['nama_sopir', 'armada', 'rute', 'shift', 'frekuensi_microsleep', 'jumlah_alert']])
+
+
+# # ================================
+# # Display Filtered Results
+# # ================================
+# st.subheader("Hasil Filter Riwayat Microsleep (Status ON)")
+# st.dataframe(df[['nama_sopir', 'timestamp', 'armada', 'rute', 'shift', 'status_alert']])
