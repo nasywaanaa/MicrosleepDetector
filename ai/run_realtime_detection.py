@@ -27,8 +27,8 @@ def parse_arguments():
                         help="Armada ID (default: BUS-001)")
     parser.add_argument("--rute", type=str, default="Jakarta-Bandung",
                         help="Route information (default: Jakarta-Bandung)")
-    parser.add_argument("--server_url", type=str, default="http://127.0.0.1:5000/vision",
-                        help="Server URL (default: http://127.0.0.1:5000/vision)")
+    parser.add_argument("--server_url", type=str, default="http://127.0.0.1:5001/vision",
+                        help="Server URL (default: http://127.0.0.1:5001/vision)")
     
     return parser.parse_args()
 

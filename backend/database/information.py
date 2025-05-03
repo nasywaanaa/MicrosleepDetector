@@ -166,4 +166,4 @@ def root():
 if __name__ == "__main__":
     print("Starting Microsleep Detector Server on port 5000...")
     print(f"Database: {db.name}, Collection: {collection.name}")
-    app.run(host="0.0.0.0", port=5000, debug=True)  # Tambahkan debug=True untuk melihat error
+    app.run(host="0.0.0.0", port=5001, debug=True)  # Tambahkan debug=True untuk melihat error

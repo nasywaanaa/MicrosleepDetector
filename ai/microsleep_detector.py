@@ -54,7 +54,7 @@ class MicrosleepDetector:
     def __init__(self, camera_id=0, ear_threshold=0.24, consec_frames=3, 
                 microsleep_frames=15, save_video=False, display_plot=True,
                 enable_audio=True, sensitivity=0.7, driver_name="Default Driver", 
-                armada="Default Armada", rute="Default Rute", server_url="http://127.0.0.1:5000/vision"):
+                armada="Default Armada", rute="Default Rute", server_url="http://127.0.0.1:5001/vision"):
         # Parameter lama
         self.generator = FaceMeshGenerator()
         self.eye_analyzer = EyeAspectRatioAnalyzer()
@@ -624,105 +624,67 @@ class MicrosleepDetector:
 
     def _send_data_to_server(self, status_alert):
         """
-        Send detection data to server and Ubidots
-        
-        Args:
-            status_alert (str): Current alert status (Normal, Blink, Drowsy, Microsleep)
+        Send detection data to server and fallback to Ubidots if failed.
         """
         current_time = time.time()
-        # Only send data if sufficient time has passed since the last send
-        if current_time - self.last_data_sent_time >= self.data_send_interval:
-            self.last_data_sent_time = current_time
-            
-            binary_status = "ON" if status_alert in ["BLINK", "DROWSY", "MICROSLEEP"] else "OFF"
+        if current_time - self.last_data_sent_time < self.data_send_interval:
+            return
 
-            if binary_status == "ON":
-                self.send_serial_signal('B')
+        self.last_data_sent_time = current_time
+        binary_status = "ON" if status_alert in ["BLINK", "DROWSY", "MICROSLEEP"] else "OFF"
 
-            
-            # Prepare payload
-            payload = {
-                "nama_sopir": self.driver_name,
-                "timestamp": datetime.now().isoformat(),
-                "armada": self.armada,
-                "rute": self.rute,
-                "status_alert": binary_status,
-            }
-            
-            # Print log to terminal
-            print(f"[{payload['timestamp']}] Sopir: {payload['nama_sopir']} | "
-                f"Armada: {payload['armada']} | Rute: {payload['rute']} | "
-                f"Status: {payload['status_alert']}")
-            
-            # Verifikasi server URL
-            if not self.server_url or self.server_url == "dummy_url":
-                print("Server URL not configured or set to dummy. Skipping data upload.")
-                return
-                
-            # Send data to server
-            try:
-                response = requests.post(self.server_url, json=payload, timeout=3)
-                if response.status_code == 200:
-                    print(f"Data successfully sent to server. Response: {response.text[:100]}...")
-                else:
-                    print(f"Warning: Failed to send data to server. Status code: {response.status_code}")
-                    print(f"Response: {response.text[:100]}...")
-                    
-                    # Try accessing the root endpoint to check server status
-                    try:
-                        server_base = self.server_url.split('/vision')[0]
-                        status_response = requests.get(f"{server_base}/status", timeout=2)
-                        print(f"Server status endpoint: {status_response.status_code}")
-                    except Exception as status_error:
-                        print(f"Could not check server status: {status_error}")
-                    
-                    # Since server is unreachable, try sending directly to Ubidots
-                    self._send_to_ubidots(status_alert, payload)
+        # Kirim sinyal ke ESP32 jika status "ON"
+        if binary_status == "ON":
+            self.send_serial_signal('B')
 
-            # except requests.exceptions.ConnectionError:
-            #     print(f"Error: Cannot connect to server at {self.server_url}. Is the server running?")
-            # except requests.exceptions.Timeout:
-            #     print(f"Error: Request timed out connecting to {self.server_url}")
-            # except Exception as e:
-            #     print(f"Error sending data to server: {e}")
+        # Payload utama
+        payload = {
+            "nama_sopir": self.driver_name,
+            "timestamp": datetime.now().isoformat(),
+            "armada": self.armada,
+            "rute": self.rute,
+            "status_alert": binary_status,
+        }
 
-            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-                print(f"Error: Cannot connect to server at {self.server_url}. Is the server running?")
-                # Since server is unreachable, try sending directly to Ubidots
+        print(f"[{payload['timestamp']}] Sopir: {payload['nama_sopir']} | "
+            f"Armada: {payload['armada']} | Rute: {payload['rute']} | Status: {payload['status_alert']}")
+
+        if not self.server_url or self.server_url == "dummy_url":
+            print("⚠️ Server URL tidak valid. Melewati pengiriman ke server.")
+            self._send_to_ubidots(status_alert, payload)
+            return
+
+        try:
+            response = requests.post(self.server_url, json=payload, timeout=3)
+            if 200 <= response.status_code < 300:
+                print(f"✅ Data berhasil dikirim ke server. Response: {response.text[:100]}...")
+            else:
+                print(f"❌ Gagal kirim ke server. Status: {response.status_code}")
                 self._send_to_ubidots(status_alert, payload)
-            except Exception as e:
-                print(f"Error sending data to server: {e}")
-                # Attempt Ubidots backup on any server error
-                self._send_to_ubidots(status_alert, payload)
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            print(f"❌ Tidak dapat menghubungi server: {e}")
+            self._send_to_ubidots(status_alert, payload)
+        except Exception as e:
+            print(f"❌ Error saat mengirim ke server: {e}")
+            self._send_to_ubidots(status_alert, payload)
+
 
     def _send_to_ubidots(self, status_alert, payload):
         """
-        Send data directly to Ubidots as a backup mechanism
-        
-        Args:
-            status_alert (str): Current alert status (Normal, Blink, Drowsy, Microsleep)
-            payload (dict): Original payload prepared for the server
+        Fallback: Kirim data ke Ubidots jika server utama gagal.
         """
         try:
-            # Try to get token from environment
-            import os
             from dotenv import load_dotenv
+            load_dotenv()
             
-            # Load .env file if available
-            try:
-                load_dotenv()
-            except Exception:
-                pass  # Continue even if dotenv fails
-                
             ubidots_token = os.getenv("UBIDOTS_TOKEN")
             device_label = os.getenv("DEVICE_LABEL", "esp32-cam")
-            
-            # If no token available, can't proceed
+
             if not ubidots_token:
-                print("Warning: UBIDOTS_TOKEN not found in environment. Skipping direct Ubidots upload.")
+                print("⚠️ Token Ubidots tidak ditemukan. Skipping upload.")
                 return
-                
-            # Prepare Ubidots payload (following the same format as in the server code)
+
             ubidots_payload = {
                 "driver_name": payload.get("nama_sopir", "Unknown"),
                 "armada": payload.get("armada", "Unknown"),
@@ -730,23 +692,23 @@ class MicrosleepDetector:
                 "timestamp": payload.get("timestamp", datetime.now().isoformat()),
                 "status_alert": 1 if status_alert == "MICROSLEEP" else 0
             }
-            
+
             headers = {
                 "X-Auth-Token": ubidots_token,
                 "Content-Type": "application/json"
             }
-            
+
             url = f"https://industrial.api.ubidots.com/api/v1.6/devices/{device_label}"
-            
             response = requests.post(url, headers=headers, json=ubidots_payload, timeout=5)
-            
-            if response.status_code == 200:
-                print(f"Data successfully sent directly to Ubidots. Status: {response.status_code}")
+
+            if 200 <= response.status_code < 300:
+                print("✅ Data berhasil dikirim ke Ubidots.")
             else:
-                print(f"Warning: Failed to send data directly to Ubidots. Status: {response.status_code}")
-                print(f"Response: {response.text[:100] if response.text else 'No response text'}")
+                print(f"❌ Gagal kirim ke Ubidots. Status: {response.status_code} | Response: {response.text[:100]}")
+
         except Exception as e:
-            print(f"Error sending data directly to Ubidots: {e}")
+            print(f"❌ Error saat mengirim ke Ubidots: {e}")
+
 
     def _update_blink_detection(self, ear, smoothed_ear):
         """
