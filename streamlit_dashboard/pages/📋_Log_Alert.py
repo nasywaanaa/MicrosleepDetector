@@ -153,7 +153,7 @@ result_df = df.groupby(['nama_sopir', 'shift']).apply(calculate_alert_frequency)
 
 # Tampilkan hasil akhir
 st.subheader("Frekuensi Microsleep per Sopir dan Shift")
-st.dataframe(result_df[['nama_sopir', 'armada', 'rute', 'shift', 'frekuensi_microsleep', 'jumlah_alert']])
+st.dataframe(result_df[['nama_sopir', 'armada', 'rute', 'shift', 'frekuensi_microsleep']])
 
 
 # # ================================

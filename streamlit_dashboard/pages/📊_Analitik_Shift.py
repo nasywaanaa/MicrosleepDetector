@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from mongodb_connection import get_mongo_client
+from components.mongo_utils import fetch_data_from_mongo
 
 # Check if the user is logged in
 if not st.session_state.get("logged_in"):
@@ -13,19 +13,19 @@ st.set_page_config(page_title="Analitik Kelelahan dan Shift", layout="wide")
 st.title("Analitik Kelelahan dan Shift")
 
 # Fetch data from MongoDB
-collection = get_mongo_client()
+# collection = get_mongo_client()
 
-# Function to fetch data from MongoDB
-def fetch_data_from_mongo():
-    # Query to get data from the collection
-    query = {}
-    projection = {"_id": 0}  # Exclude _id field
-    cursor = collection.find(query, projection)
+# # Function to fetch data from MongoDB
+# def fetch_data_from_mongo():
+#     # Query to get data from the collection
+#     query = {}
+#     projection = {"_id": 0}  # Exclude _id field
+#     cursor = collection.find(query, projection)
     
-    # Convert to DataFrame
-    data = pd.DataFrame(list(cursor))
-    data['timestamp'] = pd.to_datetime(data['timestamp'])  # Ensure 'timestamp' is datetime
-    return data
+#     # Convert to DataFrame
+#     data = pd.DataFrame(list(cursor))
+#     data['timestamp'] = pd.to_datetime(data['timestamp'])  # Ensure 'timestamp' is datetime
+#     return data
 
 # Load data from MongoDB
 df = fetch_data_from_mongo()
