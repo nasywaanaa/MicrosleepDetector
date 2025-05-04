@@ -1,8 +1,9 @@
 import pandas as pd
 import streamlit as st
 from mongodb_connection import get_mongo_client
+from components.generate_data import generate_data
 
-def fetch_data_from_mongo():
+def fetch_data_from_mongo(include_data=True):
     try:
         collection = get_mongo_client()
         query = {}
@@ -19,6 +20,10 @@ def fetch_data_from_mongo():
         if data['timestamp'].isnull().any():
             st.warning("Some 'timestamp' values could not be converted properly.")
         
+        if include_data:
+            data_df = generate_data(n=300)
+            data = pd.concat([data, data_df], ignore_index=True)
+
         return data
 
     except Exception as e:
