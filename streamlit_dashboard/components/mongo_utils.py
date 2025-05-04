@@ -20,9 +20,9 @@ def fetch_data_from_mongo(include_data=True):
         if data['timestamp'].isnull().any():
             st.warning("Some 'timestamp' values could not be converted properly.")
         
-        # if include_data:
-        #     data_df = generate_data(n=300)
-        #     data = pd.concat([data, data_df], ignore_index=True)
+        if include_data:
+            data_df = generate_data(n=300)
+            data = pd.concat([data, data_df], ignore_index=True)
 
         return data
 
