@@ -133,10 +133,23 @@ df = df[
     (df['date'] <= end_date.date())  # Convert to date for comparison
 ]
 
+# ================================
+# Rekomendasi Shift: Balanced Assignment
+# ================================
+
+# Urutkan dulu supaya tetap konsisten
+result_df = result_df.sort_values("nama_sopir").reset_index(drop=True)
+
+# Assign shift secara berurutan agar merata
+shift_list = ["Shift Pagi", "Shift Siang", "Shift Malam"]
+rekomendasi_shift = [shift_list[i % 3] for i in range(len(result_df))]
+
+result_df['rekomendasi_shift'] = rekomendasi_shift
+
 # Kelompokkan berdasarkan sopir dan shift
 result_df = df.groupby(['nama_sopir', 'shift']).apply(calculate_alert_frequency).reset_index(drop=True)
 
 # Tampilkan hasil akhir
 st.subheader("Frekuensi Microsleep")
-st.dataframe(result_df[['nama_sopir', 'armada', 'rute', 'shift', 'frekuensi_microsleep']])
+st.dataframe(result_df[['nama_sopir', 'armada', 'rute', 'shift', 'frekuensi_microsleep', 'rekomendasi_shift']])
 
