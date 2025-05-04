@@ -7,3 +7,5 @@ __pycache__/
 back
 /backend/.env
 /streamlit_dashboard/.env
+/streamlit_dashboard/input
+/streamlit_dashboard/components/generate_data
