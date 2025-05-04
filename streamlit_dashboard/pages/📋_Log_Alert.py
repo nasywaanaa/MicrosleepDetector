@@ -158,9 +158,9 @@ rekomendasi_df['rekomendasi_shift'] = [shift_list[i % len(shift_list)] for i in 
 with st.expander("Filter Rekomendasi Shift"):
     col1, col2 = st.columns(2)
     with col1:
-        filter_nama = st.multiselect("Nama Sopir", rekomendasi_df['nama_sopir'].unique())
+        filter_nama = st.multiselect("Nama Sopir (Rekomendasi)", rekomendasi_df['nama_sopir'].unique())
     with col2:
-        filter_shift = st.multiselect("Rekomendasi Shift", shift_list)
+        filter_shift = st.multiselect("Shift (Rekomendasi)", shift_list)
 
     # Terapkan filter
     if filter_nama:
