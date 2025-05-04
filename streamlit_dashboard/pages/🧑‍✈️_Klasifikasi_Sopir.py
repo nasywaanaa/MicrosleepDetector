@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from mongodb_connection import get_mongo_client
+from components.mongo_utils import fetch_data_from_mongo
 import datetime
 
 # Check if the user is logged in
@@ -10,38 +10,6 @@ if not st.session_state.get("logged_in"):
     st.stop()
 
 st.title("Klasifikasi dan Evaluasi Sopir")
-
-# Fetch data from MongoDB
-collection = get_mongo_client()
-
-# Function to fetch data from MongoDB
-# Function to fetch data from MongoDB
-def fetch_data_from_mongo():
-    # Query all documents from the collection
-    query = {}
-    projection = {"_id": 0}  # Exclude _id field
-    cursor = collection.find(query, projection)
-    
-    # Convert to DataFrame
-    data = pd.DataFrame(list(cursor))
-    
-    # Check if 'timestamp' column exists
-    if 'timestamp' not in data.columns:
-        st.error("Error: 'timestamp' column not found in the MongoDB collection!")
-        return pd.DataFrame()  # Return empty DataFrame if the column is not found
-    
-    # Convert 'timestamp' to datetime if it exists (handle ISODate format properly)
-    try:
-        data['timestamp'] = pd.to_datetime(data['timestamp'], errors='coerce')
-    except Exception as e:
-        st.error(f"Error converting 'timestamp' to datetime: {e}")
-        return pd.DataFrame()  # Return empty DataFrame if conversion fails
-    
-    # Check if conversion worked
-    if data['timestamp'].isnull().any():
-        st.warning("Some 'timestamp' values could not be converted properly.")
-    
-    return data
 
 # Load data from MongoDB
 df = fetch_data_from_mongo()

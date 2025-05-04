@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from mongodb_connection import get_mongo_client
+from components.mongo_utils import fetch_data_from_mongo
 import datetime  # Add this import
 
 # Check if the user is logged in
@@ -9,21 +9,6 @@ if not st.session_state.get("logged_in"):
     st.stop()
 
 st.title("Log Alert dan Riwayat Microsleep")
-
-# Fetch data from MongoDB
-collection = get_mongo_client()
-
-# Function to fetch data from MongoDB
-def fetch_data_from_mongo():
-    # Query to get data from the collection
-    query = {}
-    projection = {"_id": 0}  # Exclude _id field
-    cursor = collection.find(query, projection)
-    
-    # Convert to DataFrame
-    data = pd.DataFrame(list(cursor))
-    data['timestamp'] = pd.to_datetime(data['timestamp'])  # Ensure 'timestamp' is datetime
-    return data
 
 # Load data from MongoDB
 df = fetch_data_from_mongo()
