@@ -134,34 +134,9 @@ df = df[
 ]
 
 # Kelompokkan berdasarkan sopir dan shift
-# result_df = df.groupby(['nama_sopir', 'shift']).apply(calculate_alert_frequency).reset_index(drop=True)
-
-# Kelompokkan berdasarkan sopir dan shift
-if not df.empty:
-    result_df = df.groupby(['nama_sopir', 'shift']).apply(calculate_alert_frequency).reset_index(drop=True)
-
-    expected_cols = ['nama_sopir', 'armada', 'rute', 'shift', 'frekuensi_microsleep']
-    missing_cols = [col for col in expected_cols if col not in result_df.columns]
-
-    st.subheader("Frekuensi Microsleep per Sopir dan Shift")
-
-    if not result_df.empty and not missing_cols:
-        st.dataframe(result_df[expected_cols])
-    elif result_df.empty:
-        st.warning("Tidak ada data microsleep yang cocok dengan filter yang dipilih.")
-    else:
-        st.error(f"Kolom berikut tidak tersedia dalam hasil: {missing_cols}")
-else:
-    st.warning("Tidak ada data setelah diterapkan filter. Harap periksa kembali pilihan Anda.")
-
+result_df = df.groupby(['nama_sopir', 'shift']).apply(calculate_alert_frequency).reset_index(drop=True)
 
 # Tampilkan hasil akhir
-st.subheader("Frekuensi Microsleep per Sopir dan Shift")
+st.subheader("Frekuensi Microsleep")
 st.dataframe(result_df[['nama_sopir', 'armada', 'rute', 'shift', 'frekuensi_microsleep']])
 
-
-# # ================================
-# # Display Filtered Results
-# # ================================
-# st.subheader("Hasil Filter Riwayat Microsleep (Status ON)")
-# st.dataframe(df[['nama_sopir', 'timestamp', 'armada', 'rute', 'shift', 'status_alert']])
