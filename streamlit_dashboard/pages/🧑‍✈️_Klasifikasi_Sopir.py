@@ -84,8 +84,21 @@ shift_terbanyak = (
     .rename(columns={'shift': 'shift_terbanyak'})
 )[['nama_sopir', 'shift_terbanyak']]
 
-# Count microsleep occurrences per driver
-classification = filtered_df.groupby('nama_sopir').size().reset_index(name='jumlah')
+# Ambil hanya yang status_alert == "ON"
+filtered_df = filtered_df[filtered_df['status_alert'] == "ON"]
+
+# Hitung frekuensi microsleep berdasarkan jeda minimal 15 menit
+def calculate_event_frequency(group):
+    group = group.sort_values('timestamp')
+    group['time_diff'] = group['timestamp'].diff().fillna(pd.Timedelta(minutes=16))
+    group['new_event'] = group['time_diff'] > pd.Timedelta(minutes=15)
+    group['event_group'] = group['new_event'].cumsum()
+    return pd.DataFrame({
+        'nama_sopir': [group['nama_sopir'].iloc[0]],
+        'jumlah': [group['event_group'].nunique()]
+    })
+
+classification = filtered_df.groupby('nama_sopir').apply(calculate_event_frequency).reset_index(drop=True)
 
 # Calculate average and classify based on rules
 rata2 = classification['jumlah'].mean()
