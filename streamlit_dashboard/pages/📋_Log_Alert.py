@@ -133,23 +133,41 @@ df = df[
     (df['date'] <= end_date.date())  # Convert to date for comparison
 ]
 
-# ================================
-# Rekomendasi Shift: Balanced Assignment
-# ================================
-
-# Kelompokkan berdasarkan sopir dan shift
 result_df = df.groupby(['nama_sopir', 'shift']).apply(calculate_alert_frequency).reset_index(drop=True)
-
-# Urutkan dulu supaya tetap konsisten
-result_df = result_df.sort_values("nama_sopir").reset_index(drop=True)
-
-# Assign shift secara berurutan agar merata
-shift_list = ["Shift Pagi", "Shift Siang", "Shift Malam"]
-rekomendasi_shift = [shift_list[i % 3] for i in range(len(result_df))]
-
-result_df['rekomendasi_shift'] = rekomendasi_shift
 
 # Tampilkan hasil akhir
 st.subheader("Frekuensi Microsleep")
 st.dataframe(result_df[['nama_sopir', 'armada', 'rute', 'shift', 'frekuensi_microsleep', 'rekomendasi_shift']])
+
+# ================================
+# TABEL: Rekomendasi Shift (Terpisah)
+# ================================
+
+st.subheader("Rekomendasi Shift untuk Jadwal Sopir")
+
+# Buat DataFrame rekomendasi shift
+rekomendasi_df = result_df[['nama_sopir']].drop_duplicates().sort_values('nama_sopir').reset_index(drop=True)
+
+# Buat shift secara merata (round-robin)
+shift_list = ["Shift Pagi", "Shift Siang", "Shift Malam"]
+rekomendasi_df['rekomendasi_shift'] = [shift_list[i % len(shift_list)] for i in range(len(rekomendasi_df))]
+
+# ================================
+# FILTER untuk Tabel Rekomendasi Shift
+# ================================
+with st.expander("Filter Rekomendasi Shift"):
+    col1, col2 = st.columns(2)
+    with col1:
+        filter_nama = st.multiselect("Nama Sopir", rekomendasi_df['nama_sopir'].unique())
+    with col2:
+        filter_shift = st.multiselect("Rekomendasi Shift", shift_list)
+
+    # Terapkan filter
+    if filter_nama:
+        rekomendasi_df = rekomendasi_df[rekomendasi_df['nama_sopir'].isin(filter_nama)]
+    if filter_shift:
+        rekomendasi_df = rekomendasi_df[rekomendasi_df['rekomendasi_shift'].isin(filter_shift)]
+
+# Tampilkan tabel hasil filter
+st.dataframe(rekomendasi_df)
 
