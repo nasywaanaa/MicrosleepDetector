@@ -20,7 +20,7 @@ else:
         page_icon=Image.open(sigap_logo_path),
         layout="wide"
     )
-
+# 
 st.markdown("""
 <style>
     /* Base responsive styles */
