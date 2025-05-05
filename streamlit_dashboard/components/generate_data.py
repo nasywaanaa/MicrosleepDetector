@@ -6,7 +6,7 @@ import numpy as np
 def generate_data(n=300):
     np.random.seed(42)
     sopir_list = ['Budi', 'Siti', 'Andi', 'Rina', 'Joko', 'Mega']
-    armada_list = ['Bus 01', 'Bus 02', 'Bus 03']
+    armada_list = ['Bus-001', 'Bus-002', 'BUS-003']
     rute_list = ['Jakarta-Bandung', 'Jakarta-Bogor', 'Jakarta-Cikampek']
     shift_weights = [0.15, 0.35, 0.50]
 

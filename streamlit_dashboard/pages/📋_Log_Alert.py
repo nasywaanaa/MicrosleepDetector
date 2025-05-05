@@ -1,23 +1,135 @@
 import streamlit as st
 import pandas as pd
 from components.mongo_utils import fetch_data_from_mongo
-import datetime  # Add this import
+import datetime
+import os
+from PIL import Image
 
-# Check if the user is logged in
+st.set_page_config(page_title="Log Alert dan Riwayat Microsleep", layout="wide")
+
+st.markdown("""
+<style>
+.main .block-container {
+    padding-top: 1rem;
+    padding-bottom: 1.5rem;
+}
+
+.section-container {
+    margin-bottom: 1rem;
+}
+
+.header-space {
+    margin-bottom: 1.5rem;
+}
+
+.filter-container {
+    background-color: white;
+    padding: 1.5rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 1.2rem;
+}
+
+.table-container {
+    background-color: white;
+    padding: 1.5rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 1.2rem;
+}
+
+.section-title {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    color: #333;
+    padding-left: 20px;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.divider {
+    height: 1px;
+    background-color: #eee;
+    margin: 1.5rem 0;
+}
+
+.spacer {
+    height: 15px;
+}
+
+.highlight-box {
+    background-color: #f8f9fa;
+    border-left: 5px solid #b3127a;
+    padding: 1rem;
+    border-radius: 5px;
+    margin-bottom: 1rem;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 0.9rem;
+    color: white;
+}
+
+.badge-pagi {
+    background-color: #4CAF50;
+}
+
+.badge-siang {
+    background-color: #FFC107;
+    color: #333;
+}
+
+.badge-malam {
+    background-color: #3F51B5;
+}
+
+.alert-counter {
+    color: #b3127a;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+@media (max-width: 768px) {
+    .section-title {
+        margin-top: 1rem;
+        margin-bottom: 0.8rem;
+        font-size: 1.4rem;
+    }
+    
+    .filter-container, .table-container {
+        padding: 1rem;
+    }
+    
+    .header-space {
+        margin-bottom: 1rem;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
 if not st.session_state.get("logged_in"):
     st.warning("Anda harus login untuk mengakses halaman ini.")
     st.stop()
 
-st.title("Log Alert dan Riwayat Microsleep")
+st.markdown("<div class='header-space'></div>", unsafe_allow_html=True)
+logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'bangun.png')
 
-# Load data from MongoDB
+col1, col2 = st.columns([1, 5])
+with col1:
+    if os.path.exists(logo_path):
+        st.image(Image.open(logo_path), width=100)
+with col2:
+    st.title("Log Alert dan Riwayat Microsleep")
+
 df = fetch_data_from_mongo()
 
-# Add 'date' column by extracting the date from 'timestamp'
 df['date'] = df['timestamp'].dt.date
 df['hour'] = df['timestamp'].dt.hour
 
-# Add shift column based on hour
 def tentukan_shift(jam):
     if 6 <= jam < 14:
         return "Shift Pagi"
@@ -28,75 +140,59 @@ def tentukan_shift(jam):
 
 df['shift'] = df['hour'].apply(tentukan_shift)
 
-# Filter only data where status_alert == "ON"
 df = df[df['status_alert'] == "ON"]
 
-# ================================
-# Filter Sidebar / Expander
-# ================================
-st.subheader("Filter Riwayat Microsleep")
-with st.expander("Filter Data"):
-    col1, col2 = st.columns(2)
+st.markdown("<h3 class='section-title'>🔍 Filter Riwayat Microsleep</h3>", unsafe_allow_html=True)
 
-    with col1:
-        selected_sopir = st.multiselect("Nama Sopir", options=sorted(df['nama_sopir'].unique()))
-        selected_armada = st.multiselect("Armada", options=sorted(df['armada'].unique()))
-        selected_shift = st.multiselect("Shift", options=["Shift Pagi", "Shift Siang", "Shift Malam"])
+st.markdown("<div class='filter-container'>", unsafe_allow_html=True)
+col1, col2 = st.columns(2)
 
-    with col2:
-        selected_rute = st.multiselect("Rute", options=sorted(df['rute'].unique()))
+with col1:
+    selected_sopir = st.multiselect("Nama Sopir", options=sorted(df['nama_sopir'].unique()))
+    selected_armada = st.multiselect("Armada", options=sorted(df['armada'].unique()))
+    selected_shift = st.multiselect("Shift", options=["Shift Pagi", "Shift Siang", "Shift Malam"])
 
-        # Ensure there are no NaT values in the 'date' column and filter out invalid rows
-        df = df.dropna(subset=['date'])
+with col2:
+    selected_rute = st.multiselect("Rute", options=sorted(df['rute'].unique()))
 
-        # Safely get the min and max date after filtering
-        min_date = df['date'].min()
-        max_date = df['date'].max()
+    df = df.dropna(subset=['date'])
 
-        # Ensure 'min_date' and 'max_date' are valid datetime.date objects
-        if isinstance(min_date, pd.Timestamp):
-            min_date = min_date.date()
-        elif not isinstance(min_date, pd.Timestamp) and not isinstance(min_date, datetime.date):
-            min_date = None  # Handle invalid min_date
+    min_date = df['date'].min()
+    max_date = df['date'].max()
 
-        if isinstance(max_date, pd.Timestamp):
-            max_date = max_date.date()
-        elif not isinstance(max_date, pd.Timestamp) and not isinstance(max_date, datetime.date):
-            max_date = None  # Handle invalid max_date
+    if isinstance(min_date, pd.Timestamp):
+        min_date = min_date.date()
+    elif not isinstance(min_date, pd.Timestamp) and not isinstance(min_date, datetime.date):
+        min_date = None
 
-        today = pd.to_datetime("today").date()
+    if isinstance(max_date, pd.Timestamp):
+        max_date = max_date.date()
+    elif not isinstance(max_date, pd.Timestamp) and not isinstance(max_date, datetime.date):
+        max_date = None
 
-        # Default date: choose today if within the range of min_date and max_date
-        if min_date and max_date and min_date <= today <= max_date:
-            default_date = today
-        else:
-            default_date = max_date if max_date else today  # Fallback to today if max_date is invalid
+    today = pd.to_datetime("today").date()
 
-        # Date input filter
-        date_input = st.date_input(
-            "Pilih Tanggal (boleh satu atau rentang)",
-            value=(default_date, default_date),
-            min_value=min_date,
-            max_value=max_date
-        )
+    if min_date and max_date and min_date <= today <= max_date:
+        default_date = today
+    else:
+        default_date = max_date if max_date else today
 
-        # Display friendly warning if the user hasn't selected a range
-        if not isinstance(date_input, tuple):
-            st.info("Klik dua kali tanggal jika hanya ingin memilih satu hari, atau pilih dua tanggal untuk rentang waktu.")
+    date_input = st.date_input(
+        "Pilih Tanggal (boleh satu atau rentang)",
+        value=(default_date, default_date),
+        min_value=min_date,
+        max_value=max_date
+    )
 
-# ================================
-# Grouping by Nama Sopir dan Shift dengan Frekuensi Event
-# ================================
+    if not isinstance(date_input, tuple):
+        st.info("Klik dua kali tanggal jika hanya ingin memilih satu hari, atau pilih dua tanggal untuk rentang waktu.")
+st.markdown("</div>", unsafe_allow_html=True)
+
 def calculate_alert_frequency(group):
-    # Urutkan berdasarkan waktu
     group = group.sort_values('timestamp')
-    # Hitung selisih waktu antar status_alert ON
     group['time_diff'] = group['timestamp'].diff().fillna(pd.Timedelta(minutes=16))
-    # Tandai event baru jika jarak waktu lebih dari 15 menit
     group['new_event'] = group['time_diff'] > pd.Timedelta(minutes=15)
-    # Gunakan cumsum untuk membuat kelompok event
     group['event_group'] = group['new_event'].cumsum()
-    # Ambil hanya satu baris per event_group
     return pd.DataFrame({
         'nama_sopir': [group['nama_sopir'].iloc[0]],
         'armada': [group['armada'].iloc[0]],
@@ -106,9 +202,6 @@ def calculate_alert_frequency(group):
         'jumlah_alert': [len(group)]
     })
 
-# ================================
-# Apply Filters
-# ================================
 if selected_sopir:
     df = df[df['nama_sopir'].isin(selected_sopir)]
 if selected_armada:
@@ -118,7 +211,6 @@ if selected_shift:
 if selected_rute:
     df = df[df['rute'].isin(selected_rute)]
 
-# Convert 'start_date' and 'end_date' to pandas Timestamp
 if isinstance(date_input, tuple):
     start_date, end_date = date_input
 else:
@@ -127,46 +219,55 @@ else:
 start_date = pd.to_datetime(start_date)
 end_date = pd.to_datetime(end_date)
 
-# Filter data based on the selected date range
 df = df[
-    (df['date'] >= start_date.date()) &  # Convert to date for comparison
-    (df['date'] <= end_date.date())  # Convert to date for comparison
+    (df['date'] >= start_date.date()) &
+    (df['date'] <= end_date.date())
 ]
 
-result_df = df.groupby(['nama_sopir', 'shift']).apply(calculate_alert_frequency).reset_index(drop=True)
+result_df = pd.DataFrame()
+for name, group in df.groupby(['nama_sopir', 'shift']):
+    result = calculate_alert_frequency(group)
+    result_df = pd.concat([result_df, result], ignore_index=True)
 
-# Tampilkan hasil akhir
-st.subheader("Frekuensi Microsleep")
-st.dataframe(result_df[['nama_sopir', 'armada', 'rute', 'shift', 'frekuensi_microsleep']])
+st.markdown("<div class='spacer'></div>", unsafe_allow_html=True)
 
-# ================================
-# TABEL: Rekomendasi Shift (Terpisah)
-# ================================
+st.markdown("<h3 class='section-title'>📋 Detail Microsleep per Pengemudi</h3>", unsafe_allow_html=True)
 
-st.subheader("Rekomendasi Shift untuk Jadwal Sopir")
+st.markdown("<div class='table-container'>", unsafe_allow_html=True)
+if not result_df.empty:
+    st.markdown("""
+    <div class="highlight-box">
+        <p>Berikut adalah data microsleep yang dideteksi dalam periode waktu yang dipilih. 
+        Kejadian Microsleep dihitung berdasarkan alert yang terjadi dengan jeda minimal 15 menit.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("<div style='overflow-x: auto;'>", unsafe_allow_html=True)
+    
+    total_incidents = result_df['frekuensi_microsleep'].sum()
+    st.markdown(f"<p>Total Kejadian Microsleep: <span class='alert-counter'>{total_incidents}</span></p>", unsafe_allow_html=True)
+    
+    display_df = result_df.copy()
+    display_df['shift'] = display_df['shift'].apply(
+        lambda x: f"<span class='badge badge-{'pagi' if x=='Shift Pagi' else 'siang' if x=='Shift Siang' else 'malam'}'>{x}</span>"
+    )
+    
+    display_df.columns = ['Nama Pengemudi', 'Armada', 'Rute', 'Shift', 'Kejadian Microsleep', 'Total Alert']
+    
+    display_df = display_df.sort_values('Kejadian Microsleep', ascending=False)
+    
+    st.write(display_df.to_html(escape=False, index=False), unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# Buat DataFrame rekomendasi shift
-rekomendasi_df = result_df[['nama_sopir']].drop_duplicates().sort_values('nama_sopir').reset_index(drop=True)
+    csv = result_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Unduh Data (CSV)",
+        data=csv,
+        file_name=f"log_microsleep_{start_date.date()}_to_{end_date.date()}.csv",
+        mime='text/csv',
+    )
+else:
+    st.info("Tidak ada data microsleep yang cocok dengan filter yang dipilih.")
+st.markdown("</div>", unsafe_allow_html=True)
 
-# Buat shift secara merata (round-robin)
-shift_list = ["Shift Pagi", "Shift Siang", "Shift Malam"]
-rekomendasi_df['rekomendasi_shift'] = [shift_list[i % len(shift_list)] for i in range(len(rekomendasi_df))]
-
-# ================================
-# FILTER untuk Tabel Rekomendasi Shift
-# ================================
-with st.expander("Filter Rekomendasi Shift"):
-    col1, col2 = st.columns(2)
-    with col1:
-        filter_nama = st.multiselect("Nama Sopir (Rekomendasi)", rekomendasi_df['nama_sopir'].unique())
-    with col2:
-        filter_shift = st.multiselect("Shift (Rekomendasi)", shift_list)
-
-    # Terapkan filter
-    if filter_nama:
-        rekomendasi_df = rekomendasi_df[rekomendasi_df['nama_sopir'].isin(filter_nama)]
-    if filter_shift:
-        rekomendasi_df = rekomendasi_df[rekomendasi_df['rekomendasi_shift'].isin(filter_shift)]
-
-# Tampilkan tabel hasil filter
-st.dataframe(rekomendasi_df)
+st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
