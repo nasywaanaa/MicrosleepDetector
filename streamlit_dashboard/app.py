@@ -131,7 +131,7 @@ else:
         Microsleep atau tidur mikro adalah kondisi tertidur secara tidak sadar selama beberapa detik hingga 30 detik.
         Kondisi ini sangat berbahaya terutama bagi pengemudi kendaraan umum seperti bus dan angkutan lainnya.
         
-        Data menunjukkan bahwa **20-30% kecelakaan lalu lintas** disebabkan oleh pengemudi yang mengantuk atau 
+        Data menunjukkan bahwa **80% kecelakaan lalu lintas** disebabkan oleh pengemudi yang mengantuk atau 
         mengalami microsleep. SIGAP hadir sebagai solusi teknologi untuk mendeteksi dan mencegah 
         kondisi berbahaya ini.
         """)
