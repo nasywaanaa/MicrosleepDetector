@@ -10,6 +10,8 @@ from collections import deque
 import threading
 import os
 import serial
+import os
+from dotenv import load_dotenv
 
 import requests
 os.system("say 'Blink detected'")
@@ -99,7 +101,7 @@ class MicrosleepDetector:
         self.data_send_interval = 1.0  # seconds between data sends
 
         try:
-            self.serial_port = serial.Serial('/dev/tty.SLAB_USBtoUART', 9600, timeout=1)  # Ganti port sesuai sistem kamu
+            self.serial_port = serial.Serial('COM3', 9600, timeout=1)  # Ganti port sesuai sistem kamu
             print("🔌 Serial connection established with ESP32.")
         except Exception as e:
             self.serial_port = None
@@ -662,6 +664,14 @@ class MicrosleepDetector:
                 print(f"❌ Gagal kirim ke server. Status: {response.status_code}")
                 self._send_to_ubidots(status_alert, payload)
 
+            print(f"🔄 Mempersiapkan pengiriman data...")
+            success = self._send_to_ubidots(status_alert, payload)
+            
+            if success:
+                print("✅ Prioritas: Server utama")
+            else:
+                print("✅ Fallback: Ubidots")
+
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             print(f"❌ Tidak dapat menghubungi server: {e}")
             self._send_to_ubidots(status_alert, payload)
@@ -671,9 +681,7 @@ class MicrosleepDetector:
 
 
     def _send_to_ubidots(self, status_alert, payload):
-        """
-        Fallback: Kirim data ke Ubidots jika server utama gagal.
-        """
+        """Mengirim data ke Ubidots dengan format yang benar"""
         try:
             from dotenv import load_dotenv
             load_dotenv()
@@ -682,15 +690,16 @@ class MicrosleepDetector:
             device_label = os.getenv("DEVICE_LABEL", "esp32-cam")
 
             if not ubidots_token:
-                print("⚠️ Token Ubidots tidak ditemukan. Skipping upload.")
+                print("⚠️ Token Ubidots tidak ditemukan di environment variables")
                 return
 
+            # Format payload sesuai spesifikasi Ubidots
             ubidots_payload = {
                 "driver_name": payload.get("nama_sopir", "Unknown"),
                 "armada": payload.get("armada", "Unknown"),
                 "rute": payload.get("rute", "Unknown"),
-                "timestamp": payload.get("timestamp", datetime.now().isoformat()),
-                "status_alert": 1 if status_alert == "MICROSLEEP" else 0
+                "status_alert": 1 if status_alert in ["DROWSY", "MICROSLEEP"] else 0,
+                "timestamp": int(time.time() * 1000)  # Ubidots menggunakan timestamp dalam milidetik
             }
 
             headers = {
@@ -698,17 +707,24 @@ class MicrosleepDetector:
                 "Content-Type": "application/json"
             }
 
+            # Endpoint yang benar untuk Ubidots
             url = f"https://industrial.api.ubidots.com/api/v1.6/devices/{device_label}"
+            
+            print(f"🔄 Mengirim data ke Ubidots: {ubidots_payload}")
             response = requests.post(url, headers=headers, json=ubidots_payload, timeout=5)
+            response.raise_for_status()  # Akan memunculkan exception untuk status code 4xx/5xx
 
-            if 200 <= response.status_code < 300:
-                print("✅ Data berhasil dikirim ke Ubidots.")
-            else:
-                print(f"❌ Gagal kirim ke Ubidots. Status: {response.status_code} | Response: {response.text[:100]}")
-
+            print(f"✅ Data berhasil dikirim ke Ubidots. Response: {response.json()}")
+            return True
+            
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Gagal mengirim ke Ubidots: {str(e)}")
+            if hasattr(e, 'response') and e.response:
+                print(f"Detail error: {e.response.text}")
+            return False
         except Exception as e:
-            print(f"❌ Error saat mengirim ke Ubidots: {e}")
-
+            print(f"❌ Error tidak terduga: {str(e)}")
+            return False
 
     def _update_blink_detection(self, ear, smoothed_ear):
         """

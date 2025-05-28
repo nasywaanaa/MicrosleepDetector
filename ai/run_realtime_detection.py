@@ -21,7 +21,7 @@ def parse_arguments():
                         help="Detection sensitivity (0.0-1.0, default: 0.8)")
     parser.add_argument("--audio", action="store_true", default=True,
                         help="Enable audio alerts")
-    parser.add_argument("--driver_name", type=str, default="Ahmad Sopir",
+    parser.add_argument("--driver_name", type=str, default="Jupri",
                         help="Driver name (default: Ahmad Sopir)")
     parser.add_argument("--armada", type=str, default="BUS-001",
                         help="Armada ID (default: BUS-001)")

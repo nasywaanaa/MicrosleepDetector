@@ -1,4 +1,4 @@
-import certifi
+# import certifi
 from flask import Flask, request, jsonify
 import requests
 from pymongo import MongoClient
